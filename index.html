@@ -165,6 +165,7 @@ input:focus,select:focus{outline:none;border-color:var(--g)}
   <div style="display:flex;align-items:center;gap:8px">
     <span id="sync-badge" style="font-size:11px;padding:3px 10px;border-radius:999px;font-weight:600;display:none"></span>
     <button onclick="syncNow(false)" style="font-size:11px;padding:4px 10px;border-radius:999px;border:1px solid var(--b);background:var(--w);cursor:pointer;color:var(--t2);font-weight:600">🔄</button>
+    <button onclick="openTargetModal()" style="font-size:11px;padding:4px 10px;border-radius:999px;border:1px solid var(--b);background:var(--w);cursor:pointer;color:var(--t2);font-weight:600">🎯</button>
   </div>
 </div>
 
@@ -458,6 +459,7 @@ const FULLDB=[
   {n:"Peperoni verdi",k:20,c:4,p:0.9,g:0.2},{n:"Pere",k:57,c:15,p:0.4,g:0.1},
   {n:"Pesche",k:39,c:10,p:0.9,g:0.1},{n:"Pesco Spada",k:109,c:0,p:20,g:3},
   {n:"Pesce Spada",k:109,c:0,p:20,g:3},{n:"Pesto alla genovese",k:497,c:4,p:6,g:50},
+  {n:"Philadelphia Proteica",k:60,c:3.5,p:10,g:0.2},
   {n:"Petto di pollo",k:110,c:0,p:23,g:1.6},{n:"Petto di tacchino",k:106,c:0,p:22,g:1.6},
   {n:"Piadina",k:284,c:47,p:8,g:8},{n:"Pinoli",k:673,c:13,p:14,g:68},
   {n:"Pistacchi",k:562,c:28,p:20,g:45},{n:"Piselli",k:81,c:14,p:5,g:0.4},
@@ -521,6 +523,7 @@ let DBM=getDBM();
 // Verdure drill-down
 const VERDURE_DRILL=["Melanzane","Zucchine","Broccoli","Lattuga","Pomodori","Peperoni rossi","Funghi champignon","Carote"];
 const TOPPING_DRILL=["Salsiccia","Prosciutto cotto","Prosciutto crudo","Parmigiano","Salame Milano","Patate","Gorgonzola","Provola","Stracciatella","Burrata","Mortadella","Pesto di pistacchi","Noci"];
+const PANINO_FILL=["Prosciutto cotto","Prosciutto crudo","Tonno sott'olio","Tonno al naturale","Parmigiano","Olio","Pomodori","Philadelphia Proteica"];
 
 // ═══════════════════════════════════════════════════════════════
 // TEMPLATES
@@ -533,7 +536,10 @@ const BT={
     {id:"cD",l:"Latte & Marmellata",items:[{n:"Latte",d:300},{n:"Pane",d:70},{n:"Marmellata",d:30}],isy:false},
     {id:"cE",l:"Ricotta & Miele",items:[{n:"Pane",d:60},{n:"Ricotta",d:80},{n:"Miele",d:5}],isy:false},
   ],
-  spuntino_m:[{id:"smA",l:"Frutta",items:[{n:"Frutta",d:150}],isy:false}],
+  spuntino_m:[
+    {id:"smA",l:"Frutta",items:[{n:"Frutta",d:150}],isy:false},
+    {id:"smPan",l:"Panino con...",items:[{n:"Pane",d:80,vv:50},{n:"__PANINO__",d:80}],isy:false,drill:true,drillType:"panino"},
+  ],
   pranzo:[
     // Pasta con Verdura (drill-down verdura)
     {id:"pVerd",l:"Pasta con Verdura",items:[{n:"Pasta",d:80,dv:80},{n:"__VERDURA__",d:250},{n:"Parmigiano",d:20},{n:"Olio",d:0}],isy:false,drill:true,drillType:"verdura"},
@@ -559,6 +565,7 @@ const BT={
     {id:"spC",l:"Yogurt Kinder",items:[{n:"Yogurt greco",d:200},{n:"Cioccolato kinder",d:30}],isy:false},
     {id:"spD",l:"Pane & Prosciutto",items:[{n:"Pane",d:50},{n:"Prosciutto cotto",d:100}],isy:false},
     {id:"spE",l:"Mandorle & Parmigiano",items:[{n:"Mandorle",d:20},{n:"Parmigiano",d:30}],isy:false},
+    {id:"spPan",l:"Panino con...",items:[{n:"Pane",d:80,vv:50},{n:"__PANINO__",d:80}],isy:false,drill:true,drillType:"panino"},
   ],
   cena:[
     // Secondi con verdura drill-down
@@ -862,8 +869,17 @@ function resolveItems(t,cat,forDisplay){
       const vg_=gramV["V|"+t.id+"|"+i]!==undefined?gramV["V|"+t.id+"|"+i]:Math.round(dg*.9/5)*5;
       return{n:verdura,d:dg,v:vg_,key:t.id+"|"+i};
     }
+    if(it.n==="__PANINO__"){
+      const fills=drillSel[t.id+"_p"]||[];
+      if(!fills.length)return null;
+      return fills.map((fill,fi)=>{
+        const itemKey=t.id+"|"+i+"|"+fi;
+        const dg=getDG(itemKey,it.d);
+        const vg_=gramV["V|"+itemKey]!==undefined?gramV["V|"+itemKey]:dg;
+        return{n:fill,d:dg,v:vg_,key:itemKey};
+      });
+    }
     if(it.n==="__TOPPING__"){
-      const toppings=drillSel[t.id+"_t"]||[];
       if(!toppings.length)return null;
       // Return array of items - one per topping, will be flattened below
       return toppings.map((topping,ti)=>{
@@ -909,6 +925,10 @@ function renderTmpls(){
           const selectedArr=drillSel[t.id+"_t"]||[];
           body+=`<div class="drill-section" style="margin-top:8px;background:#f5f0ff;border-color:#c4b5fd"><div class="drill-title" style="color:var(--v)">🍕 Scegli i topping (puoi selezionarne più di uno)</div><div class="drill-opts">${TOPPING_DRILL.map(v=>`<button class="drill-opt${selectedArr.includes(v)?" sel":""}" style="${selectedArr.includes(v)?"background:var(--v);border-color:var(--v)":""}" onclick="selectDrill('${t.id}','t','${v}')">${selectedArr.includes(v)?"✓ ":""}${v}</button>`).join("")}</div></div>`;
         }
+        if(t.drillType==="panino"){
+          const selectedArr=drillSel[t.id+"_p"]||[];
+          body+=`<div class="drill-section" style="margin-top:8px;background:#fff8e1;border-color:#ffe082"><div class="drill-title" style="color:#856404">🥪 Scegli il ripieno (puoi selezionarne più di uno)</div><div class="drill-opts">${PANINO_FILL.map(v=>`<button class="drill-opt${selectedArr.includes(v)?" sel":""}" style="${selectedArr.includes(v)?"background:#856404;border-color:#856404;color:#fff":""}" onclick="selectDrill('${t.id}','p','${v}')">${selectedArr.includes(v)?"✓ ":""}${v}</button>`).join("")}</div></div>`;
+        }
       }
 
       body+=`<div class="ig-hdr"><span>Alimento</span><span class="hd">Davide</span><span class="hv">Valentina</span></div>`;
@@ -948,9 +968,9 @@ function renderTmpls(){
 }
 
 function selectDrill(tmplId,type,value){
-  if(type==="t"){
-    // Multi-select toggle for toppings
-    const key=tmplId+"_t";
+  if(type==="t"||type==="p"){
+    // Multi-select toggle for toppings and panino fills
+    const key=tmplId+"_"+type;
     if(!drillSel[key])drillSel[key]=[];
     const idx=drillSel[key].indexOf(value);
     if(idx>=0)drillSel[key].splice(idx,1);
@@ -1222,11 +1242,19 @@ const RDA={
   Davide:   {fib:30, ca:1000, fe:10, k:3900, mg:240, vc:105, vd:15, b12:2.4},
   Valentina:{fib:30, ca:1000, fe:11, k:3900, mg:255, vc:130, vd:15, b12:4.0}
 };
-// Target macro giornalieri: kcal totali + ripartizione % carbo/proteine/grassi
-const MACRO_TARGETS={
+// Target macro giornalieri — modificabili dall'utente, persistiti in localStorage
+const MACRO_TARGETS_DEFAULT={
   Davide:   {kcal:1900, pC:40, pP:35, pG:25},
   Valentina:{kcal:1650, pC:50, pP:25, pG:25}
 };
+let MACRO_TARGETS={...MACRO_TARGETS_DEFAULT};
+function loadMacroTargets(){
+  try{const r=localStorage.getItem("macro-targets-v1");if(r)MACRO_TARGETS=JSON.parse(r);}catch{}
+}
+function saveMacroTargets(){
+  try{localStorage.setItem("macro-targets-v1",JSON.stringify(MACRO_TARGETS));}catch{}
+}
+loadMacroTargets();
 function macroTargetGrams(persona){
   const t=MACRO_TARGETS[persona]||MACRO_TARGETS.Davide;
   return{
@@ -1235,6 +1263,108 @@ function macroTargetGrams(persona){
     g:Math.round(t.kcal*t.pG/100/9),
     kcal:t.kcal
   };
+}
+function openTargetModal(){
+  const ex=document.getElementById("target-modal");if(ex)ex.remove();
+  const modal=document.createElement("div");
+  modal.id="target-modal";
+  modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;display:flex;align-items:flex-end;justify-content:center";
+
+  function personaBlock(per,color){
+    const t=MACRO_TARGETS[per];
+    const colorHex=per==="Davide"?"#1D9E75":"#9C59D1";
+    return`<div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:${colorHex};margin-bottom:10px">👤 ${per}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px">Kcal target</div>
+          <input type="number" id="tgt-${per}-kcal" min="1000" max="5000" step="50" value="${t.kcal}"
+            style="text-align:center;font-size:16px;font-weight:700">
+        </div>
+        <div style="display:flex;align-items:center;padding-top:20px">
+          <div style="font-size:11px;color:var(--t3);line-height:1.6">
+            C: ${Math.round(t.kcal*t.pC/100/4)}g<br>
+            P: ${Math.round(t.kcal*t.pP/100/4)}g<br>
+            G: ${Math.round(t.kcal*t.pG/100/9)}g
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">Ripartizione macro %</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#378ADD;margin-bottom:4px">Carbo %</div>
+          <input type="number" id="tgt-${per}-pC" min="0" max="100" step="5" value="${t.pC}"
+            style="text-align:center;font-size:15px;font-weight:700;color:#378ADD"
+            oninput="autoBalanceMacro('${per}','pC',this.value)">
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:${colorHex};margin-bottom:4px">Proteine %</div>
+          <input type="number" id="tgt-${per}-pP" min="0" max="100" step="5" value="${t.pP}"
+            style="text-align:center;font-size:15px;font-weight:700;color:${colorHex}"
+            oninput="autoBalanceMacro('${per}','pP',this.value)">
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#D85A30;margin-bottom:4px">Grassi %</div>
+          <input type="number" id="tgt-${per}-pG" min="0" max="100" step="5" value="${t.pG}"
+            style="text-align:center;font-size:15px;font-weight:700;color:#D85A30"
+            oninput="autoBalanceMacro('${per}','pG',this.value)">
+        </div>
+      </div>
+      <div id="tgt-${per}-warn" style="font-size:11px;color:var(--r);margin-top:6px;text-align:center;display:none">⚠️ La somma deve essere 100%</div>
+    </div>`;
+  }
+
+  modal.innerHTML=`<div style="background:var(--w);border-radius:16px 16px 0 0;padding:22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">🎯 Target calorie e macro</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:14px">Le percentuali devono sommare 100%. La somma dei grammi viene calcolata automaticamente.</div>
+    ${personaBlock("Davide")}
+    ${personaBlock("Valentina")}
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button onclick="document.getElementById('target-modal').remove()" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--b);background:var(--bg);font-size:14px;font-weight:600;cursor:pointer">Annulla</button>
+      <button onclick="resetTargets()" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--b);background:var(--bg);font-size:13px;font-weight:600;cursor:pointer;color:var(--t3)">Reset</button>
+      <button onclick="saveTargets()" style="flex:2;padding:12px;border-radius:10px;border:none;background:var(--g);color:#fff;font-size:14px;font-weight:700;cursor:pointer">Salva</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener("click",e=>{if(e.target===modal)modal.remove();});
+}
+
+function autoBalanceMacro(per,changed,val){
+  // Update the preview grams dynamically
+  const kcal=parseFloat(document.getElementById(`tgt-${per}-kcal`)?.value)||0;
+  const pC=parseFloat(document.getElementById(`tgt-${per}-pC`)?.value)||0;
+  const pP=parseFloat(document.getElementById(`tgt-${per}-pP`)?.value)||0;
+  const pG=parseFloat(document.getElementById(`tgt-${per}-pG`)?.value)||0;
+  const sum=pC+pP+pG;
+  const warn=document.getElementById(`tgt-${per}-warn`);
+  if(warn)warn.style.display=sum===100?"none":"block";
+}
+
+function saveTargets(){
+  let valid=true;
+  ["Davide","Valentina"].forEach(per=>{
+    const kcal=parseFloat(document.getElementById(`tgt-${per}-kcal`)?.value);
+    const pC=parseFloat(document.getElementById(`tgt-${per}-pC`)?.value);
+    const pP=parseFloat(document.getElementById(`tgt-${per}-pP`)?.value);
+    const pG=parseFloat(document.getElementById(`tgt-${per}-pG`)?.value);
+    if(isNaN(kcal)||kcal<500){showToast(`Kcal ${per} non valide`,false);valid=false;return;}
+    if(Math.round(pC+pP+pG)!==100){showToast(`Somma % ${per} deve essere 100`,false);valid=false;return;}
+    MACRO_TARGETS[per]={kcal,pC,pP,pG};
+  });
+  if(!valid)return;
+  saveMacroTargets();
+  document.getElementById("target-modal")?.remove();
+  showToast("Target salvati ✓");
+  // Refresh recap if open
+  if(document.getElementById("pg-recap").classList.contains("act"))renderRecap();
+}
+
+function resetTargets(){
+  MACRO_TARGETS={...MACRO_TARGETS_DEFAULT};
+  saveMacroTargets();
+  document.getElementById("target-modal")?.remove();
+  showToast("Target ripristinati ai valori di default");
+  if(document.getElementById("pg-recap").classList.contains("act"))renderRecap();
 }
 const MICRO_LABELS={
   fib:{l:"Fibre",u:"g",icon:"🌾"},
