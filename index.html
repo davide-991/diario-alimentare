@@ -873,18 +873,18 @@ function resolveItems(t,cat,forDisplay){
       const fills=drillSel[t.id+"_p"]||[];
       if(!fills.length)return null;
       return fills.map((fill,fi)=>{
-        const itemKey=t.id+"|"+i+"|"+fi;
-        const dg=getDG(itemKey,it.d);
+        const itemKey=t.id+"|pn"+fi;
+        const dg=getDG(itemKey,it.d||80);
         const vg_=gramV["V|"+itemKey]!==undefined?gramV["V|"+itemKey]:dg;
         return{n:fill,d:dg,v:vg_,key:itemKey};
       });
     }
     if(it.n==="__TOPPING__"){
+      const toppings=drillSel[t.id+"_t"]||[];
       if(!toppings.length)return null;
-      // Return array of items - one per topping, will be flattened below
       return toppings.map((topping,ti)=>{
-        const itemKey=t.id+"|"+i+"|"+ti;
-        const dg=getDG(itemKey,it.d);
+        const itemKey=t.id+"|tp"+ti;
+        const dg=getDG(itemKey,it.d||80);
         const vg_=gramV["V|"+itemKey]!==undefined?gramV["V|"+itemKey]:dg;
         return{n:topping,d:dg,v:vg_,key:itemKey};
       });
@@ -919,15 +919,15 @@ function renderTmpls(){
       if(t.drill||t.hasDrill){
         if(t.hasDrill||t.drillType==="verdura"){
           const selected=drillSel[t.id+"_v"]||(t.hasDrill?drillSel[t.id]:null);
-          body+=`<div class="drill-section"><div class="drill-title">🥦 Scegli la verdura</div><div class="drill-opts">${VERDURE_DRILL.map(v=>`<button class="drill-opt${selected===v?" sel":""}" onclick="selectDrill('${t.id}','v','${v}')">${v}</button>`).join("")}</div></div>`;
+          body+=`<div class="drill-section"><div class="drill-title">🥦 Scegli la verdura</div><div class="drill-opts">${VERDURE_DRILL.map(v=>`<button class="drill-opt${selected===v?" sel":""}" onclick="selectDrill('${t.id}','v','${v.replace(/'/g,"&#39;")}')">${v}</button>`).join("")}</div></div>`;
         }
         if(t.drillType==="topping"){
           const selectedArr=drillSel[t.id+"_t"]||[];
-          body+=`<div class="drill-section" style="margin-top:8px;background:#f5f0ff;border-color:#c4b5fd"><div class="drill-title" style="color:var(--v)">🍕 Scegli i topping (puoi selezionarne più di uno)</div><div class="drill-opts">${TOPPING_DRILL.map(v=>`<button class="drill-opt${selectedArr.includes(v)?" sel":""}" style="${selectedArr.includes(v)?"background:var(--v);border-color:var(--v)":""}" onclick="selectDrill('${t.id}','t','${v}')">${selectedArr.includes(v)?"✓ ":""}${v}</button>`).join("")}</div></div>`;
+          body+=`<div class="drill-section" style="margin-top:8px;background:#f5f0ff;border-color:#c4b5fd"><div class="drill-title" style="color:var(--v)">🍕 Scegli i topping (puoi selezionarne più di uno)</div><div class="drill-opts">${TOPPING_DRILL.map(v=>`<button class="drill-opt${selectedArr.includes(v)?" sel":""}" style="${selectedArr.includes(v)?"background:var(--v);border-color:var(--v)":""}" data-tid="${t.id}" data-type="t" data-val="${v.replace(/"/g,"&quot;")}" onclick="selectDrillBtn(this)">${selectedArr.includes(v)?"✓ ":""}${v}</button>`).join("")}</div></div>`;
         }
         if(t.drillType==="panino"){
           const selectedArr=drillSel[t.id+"_p"]||[];
-          body+=`<div class="drill-section" style="margin-top:8px;background:#fff8e1;border-color:#ffe082"><div class="drill-title" style="color:#856404">🥪 Scegli il ripieno (puoi selezionarne più di uno)</div><div class="drill-opts">${PANINO_FILL.map(v=>`<button class="drill-opt${selectedArr.includes(v)?" sel":""}" style="${selectedArr.includes(v)?"background:#856404;border-color:#856404;color:#fff":""}" onclick="selectDrill('${t.id}','p','${v}')">${selectedArr.includes(v)?"✓ ":""}${v}</button>`).join("")}</div></div>`;
+          body+=`<div class="drill-section" style="margin-top:8px;background:#fff8e1;border-color:#ffe082"><div class="drill-title" style="color:#856404">🥪 Scegli il ripieno (puoi selezionarne più di uno)</div><div class="drill-opts">${PANINO_FILL.map(v=>`<button class="drill-opt${selectedArr.includes(v)?" sel":""}" style="${selectedArr.includes(v)?"background:#856404;border-color:#856404;color:#fff":""}" data-tid="${t.id}" data-type="p" data-val="${v.replace(/"/g,"&quot;")}" onclick="selectDrillBtn(this)">${selectedArr.includes(v)?"✓ ":""}${v}</button>`).join("")}</div></div>`;
         }
       }
 
@@ -967,6 +967,9 @@ function renderTmpls(){
   document.getElementById("summ").textContent=selId||extras.length?"Premi Salva quando pronto":"Seleziona un template o aggiungi alimenti";
 }
 
+function selectDrillBtn(btn){
+  selectDrill(btn.dataset.tid, btn.dataset.type, btn.dataset.val);
+}
 function selectDrill(tmplId,type,value){
   if(type==="t"||type==="p"){
     // Multi-select toggle for toppings and panino fills
